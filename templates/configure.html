@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="flex items-center justify-center min-h-[80vh]">
+    <div class="max-w-xl mx-auto bg-gray-800 p-8 rounded-lg shadow-xl">
+        <h1 class="text-3xl font-bold text-cyan-400 mb-2 text-center">配置您的应用</h1>
+        <p class="text-gray-400 mb-6 text-center">请输入从123云盘开发者平台获取的凭证。</p>
+        
+        <form action="{{ url_for('configure') }}" method="POST">
+            <div class="mb-4">
+                <label for="client_id" class="block mb-2 text-sm font-medium text-gray-300">Client ID</label>
+                <input name="client_id" id="client_id" type="text" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5" required>
+            </div>
+            <div class="mb-6">
+                <label for="client_secret" class="block mb-2 text-sm font-medium text-gray-300">Client Secret</label>
+                <input name="client_secret" id="client_secret" type="password" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5" required>
+            </div>
+            <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 rounded-lg transition">保存并验证</button>
+        </form>
+        <p class="text-xs text-gray-500 mt-4">
+            您的凭证将仅保存在您当前浏览器的会话中，关闭浏览器后将清除。本项目已开源，确保您的数据安全。
+            <a href="https://www.123pan.cn/developer" target="_blank" class="text-cyan-500 hover:underline">如何获取凭证?</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

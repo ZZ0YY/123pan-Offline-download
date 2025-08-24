@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>123Pan Offline Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .progress-bar-transition {
+            transition: width 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans">
+    <div class="container mx-auto p-4 md:p-8">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div id="flash-messages" class="fixed top-5 right-5 z-50">
+                {% for category, message in messages %}
+                    {% set category_color = 'bg-green-600' if category == 'success' else 'bg-cyan-600' if category == 'info' else 'bg-yellow-600' if category == 'warning' else 'bg-red-600' %}
+                    <div class="mb-2 px-4 py-3 rounded-lg shadow-lg text-white {{ category_color }}" role="alert">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </div>
+    <script>
+        // 自动隐藏提示消息
+        const flashMessages = document.getElementById('flash-messages');
+        if (flashMessages) {
+            setTimeout(() => {
+                flashMessages.style.transition = 'opacity 0.5s ease';
+                flashMessages.style.opacity = '0';
+                setTimeout(() => flashMessages.remove(), 500);
+            }, 5000); // 5秒后消失
+        }
+    </script>
+</body>
+</html>

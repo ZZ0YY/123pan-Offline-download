@@ -1,0 +1,192 @@
+{% extends "layout.html" %}
+{% block content %}
+<header class="flex justify-between items-center mb-6 pb-4 border-b border-gray-700">
+    <h1 class="text-2xl font-bold text-cyan-400">离线任务仪表盘</h1>
+    <a href="{{ url_for('logout') }}" class="bg-yellow-600 hover:bg-yellow-700 text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold">退出 & 重新配置</a>
+</header>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- 左侧：添加任务 -->
+    <div class="lg:col-span-1 bg-gray-800 p-6 rounded-lg h-fit shadow-lg">
+        <h2 class="text-xl font-semibold mb-4">添加新任务</h2>
+        <form action="{{ url_for('add_tasks') }}" method="POST">
+            <div class="mb-4">
+                <label for="links" class="block mb-2 text-sm font-medium">下载链接 (每行一个)</label>
+                <textarea name="links" id="links" rows="8" class="w-full bg-gray-700 rounded-lg p-2.5" placeholder="粘贴 http/https 链接..." required></textarea>
+            </div>
+            <div class="mb-6">
+                <label for="dirPathDisplay" class="block mb-2 text-sm font-medium">保存到目录 (可选)</label>
+                <div class="flex">
+                    <input id="dirPathDisplay" type="text" class="w-full bg-gray-700 rounded-l-lg p-2.5" placeholder="点击右侧按钮选择..." readonly>
+                    <!-- 隐藏输入框，用于向后端提交真正的dirID -->
+                    <input type="hidden" name="dirID" id="dirID_hidden">
+                    <button type="button" id="openFolderBrowserBtn" class="bg-cyan-600 hover:bg-cyan-700 px-4 rounded-r-lg">选择...</button>
+                </div>
+            </div>
+            <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 rounded-lg">批量提交任务</button>
+        </form>
+    </div>
+
+    <!-- 右侧：任务列表 -->
+    <div class="lg:col-span-2 bg-gray-800 p-6 rounded-lg shadow-lg">
+        <h2 class="text-xl font-semibold mb-4">任务监控</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead class="text-xs text-gray-400 uppercase bg-gray-700">
+                    <tr>
+                        <th class="px-4 py-3">Task ID</th>
+                        <th class="px-4 py-3">状态</th>
+                        <th class="px-4 py-3 w-1/2">进度</th>
+                    </tr>
+                </thead>
+                <tbody id="task-list-body">
+                    <tr><td colspan="3" class="text-center py-8 text-gray-500">正在初始化监控...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 文件夹浏览器模态窗口 -->
+<div id="folderBrowserModal" class="fixed inset-0 bg-black bg-opacity-60 items-center justify-center z-50 hidden">
+    <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg h-3/4 flex flex-col">
+        <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+            <h3 class="text-lg font-semibold">选择一个文件夹</h3>
+            <button id="closeFolderBrowserBtn" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+        </div>
+        <div id="folderTreeContainer" class="p-4 overflow-y-auto flex-grow">
+            <!-- JS会在这里填充文件夹树 -->
+        </div>
+        <div class="p-4 border-t border-gray-700 flex justify-end">
+            <button id="cancelFolderBrowserBtn" class="px-4 py-2 bg-gray-600 rounded">取消</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- 任务监控 ---
+        const statusMapping = {
+            0: { text: '进行中', color: 'bg-blue-600' }, 1: { text: '下载失败', color: 'bg-red-600' },
+            2: { text: '下载成功', color: 'bg-green-600' }, 3: { text: '重试中', color: 'bg-yellow-600' },
+            '-1': { text: '查询失败/已过期', color: 'bg-gray-600'}
+        };
+
+        async function fetchTaskStatus() {
+            try {
+                const response = await fetch("{{ url_for('get_tasks_status') }}");
+                if (!response.ok) { window.location.href = "{{ url_for('configure') }}"; return; }
+                const tasks = await response.json();
+                const tbody = document.getElementById('task-list-body');
+                tbody.innerHTML = '';
+                const taskIds = Object.keys(tasks);
+                if (taskIds.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-gray-500">暂无监控中的任务。</td></tr>';
+                    return;
+                }
+                taskIds.sort((a, b) => b - a).forEach(taskId => {
+                    const task = tasks[taskId];
+                    const statusInfo = statusMapping[task.status] || { text: '未知', color: 'bg-gray-600' };
+                    const progress = parseFloat(task.process || 0).toFixed(2);
+                    const rowHtml = `
+                        <tr class="border-b border-gray-700">
+                            <td class="px-4 py-3 font-mono text-gray-400">${taskId}</td>
+                            <td class="px-4 py-3"><span class="px-2 py-1 text-xs font-medium rounded-full ${statusInfo.color}">${statusInfo.text}</span></td>
+                            <td class="px-4 py-3">
+                                <div class="w-full bg-gray-600 rounded-full h-2.5">
+                                    <div class="progress-bar-transition ${statusInfo.color} h-2.5 rounded-full" style="width: ${progress}%"></div>
+                                </div>
+                                <span class="text-xs text-gray-400 ml-2">${progress}%</span>
+                            </td></tr>`;
+                    tbody.insertAdjacentHTML('beforeend', rowHtml);
+                });
+            } catch (error) {
+                console.error("加载任务状态失败:", error);
+                document.getElementById('task-list-body').innerHTML = '<tr><td colspan="3" class="text-center py-8 text-red-400">加载任务状态失败。</td></tr>';
+            }
+        }
+        fetchTaskStatus();
+        setInterval(fetchTaskStatus, 3000);
+
+        // --- 文件夹浏览器 ---
+        const openBtn = document.getElementById('openFolderBrowserBtn');
+        const modal = document.getElementById('folderBrowserModal');
+        const treeContainer = document.getElementById('folderTreeContainer');
+        const dirPathDisplay = document.getElementById('dirPathDisplay');
+        const dirIDHidden = document.getElementById('dirID_hidden');
+        
+        const closeButtons = [document.getElementById('closeFolderBrowserBtn'), document.getElementById('cancelFolderBrowserBtn')];
+        closeButtons.forEach(btn => btn.addEventListener('click', () => modal.style.display = 'none'));
+
+        openBtn.addEventListener('click', () => {
+            modal.style.display = 'flex';
+            treeContainer.innerHTML = '';
+            const rootUl = document.createElement('ul');
+            treeContainer.appendChild(rootUl);
+            
+            const rootLi = document.createElement('li');
+            rootLi.innerHTML = `<div class="folder-item flex items-center p-1 rounded hover:bg-gray-700 cursor-pointer">
+                <span class="expander w-6 text-center">▸</span>
+                <span class="folder-name flex-grow font-bold">根目录</span>
+                <button class="select-btn bg-cyan-700 text-xs px-2 py-0.5 rounded">选择</button>
+            </div><ul class="subfolder-list hidden pl-6"></ul>`;
+            rootUl.appendChild(rootLi);
+
+            const selectRootAction = () => selectAndClose('根目录', '0');
+            rootLi.querySelector('.folder-name').addEventListener('click', selectRootAction);
+            rootLi.querySelector('.select-btn').addEventListener('click', selectRootAction);
+
+            rootLi.querySelector('.expander').addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleExpand(e.currentTarget, 0, '根目录');
+            });
+        });
+        
+        function selectAndClose(path, id) {
+            dirPathDisplay.value = path;
+            dirIDHidden.value = id;
+            modal.style.display = 'none';
+        }
+
+        async function toggleExpand(expander, parentId, pathPrefix) {
+            const subfolderList = expander.closest('.folder-item').nextElementSibling;
+            const isExpanded = subfolderList.classList.toggle('hidden');
+            expander.textContent = isExpanded ? '▸' : '▾';
+            if (!isExpanded && subfolderList.innerHTML === '') {
+                subfolderList.innerHTML = '<li class="text-gray-400 pl-4">加载中...</li>';
+                try {
+                    const response = await fetch(`/api/get_folders?parent_id=${parentId}`);
+                    const folders = await response.json();
+                    subfolderList.innerHTML = '';
+                    if (folders.length === 0) {
+                        subfolderList.innerHTML = '<li class="text-gray-500 pl-4">（空）</li>';
+                    }
+                    folders.forEach(folder => {
+                        const li = document.createElement('li');
+                        const fullPath = (pathPrefix === '根目录') ? folder.name : `${pathPrefix}/${folder.name}`;
+                        li.innerHTML = `<div class="folder-item flex items-center p-1 rounded hover:bg-gray-700 cursor-pointer">
+                            <span class="expander w-6 text-center">▸</span>
+                            <span class="folder-name flex-grow">${folder.name}</span>
+                            <button class="select-btn bg-cyan-700 text-xs px-2 py-0.5 rounded">选择</button>
+                        </div><ul class="subfolder-list hidden pl-6"></ul>`;
+                        
+                        const newExpander = li.querySelector('.expander');
+                        newExpander.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            toggleExpand(newExpander, folder.id, fullPath);
+                        });
+                        
+                        const selectAction = () => selectAndClose(fullPath, folder.id);
+                        li.querySelector('.folder-name').addEventListener('click', selectAction);
+                        li.querySelector('.select-btn').addEventListener('click', selectAction);
+
+                        subfolderList.appendChild(li);
+                    });
+                } catch (error) {
+                    subfolderList.innerHTML = '<li class="text-red-400 pl-4">加载失败</li>';
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

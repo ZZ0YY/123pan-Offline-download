@@ -1,0 +1,13 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="flex items-center justify-center min-h-[80vh]">
+    <div class="max-w-xl mx-auto bg-red-900 border border-red-700 p-8 rounded-lg shadow-xl text-center">
+        <h1 class="text-3xl font-bold text-red-300 mb-4">{{ title or "发生错误" }}</h1>
+        <p class="text-red-200">{{ message or "未知错误，请检查终端日志。" }}</p>
+        <p class="text-xs text-red-400 mt-6">请检查您输入的凭证是否正确，并确保网络连接正常。</p>
+        <div class="mt-6">
+            <a href="{{ url_for('configure') }}" class="bg-gray-200 text-gray-900 px-4 py-2 rounded-lg font-semibold">返回配置页面</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
