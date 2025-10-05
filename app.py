@@ -1,8 +1,9 @@
 # app.py
 import os
-import requests
+import json
 import time
-from flask import Flask, session, render_template, url_for, flash, jsonify, request, redirect
+import requests
+from flask import Flask, render_template, url_for, flash, jsonify, request, redirect
 from dotenv import load_dotenv
 from functools import wraps
 from datetime import datetime
@@ -12,53 +13,96 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'a-very-secret-key-for-dev-use-only')
 
-CLIENT_ID_SESSION_KEY = 'client_id'
-CLIENT_SECRET_SESSION_KEY = 'client_secret'
-TOKEN_SESSION_KEY = 'access_token'
-EXPIRED_AT_SESSION_KEY = 'token_expired_at'
-TASK_IDS_SESSION_KEY = 'task_ids'
+CONFIG_FILE = 'config.json'
+# 定义根域名，方便拼接不同的API路径
+API_DOMAIN = 'https://open-api.123pan.com' 
 
-API_BASE_URL = 'https://open-api.123pan.com/api/v1'
-API_V2_BASE_URL = 'https://open-api.123pan.com/api/v2'
+# --- 内存缓存 ---
+# 用于在内存中缓存access_token，避免每次请求都读取文件
+_token_cache = {
+    'accessToken': None,
+    'expired_at_ts': 0  # 存储为Unix时间戳，方便比较
+}
 
-# --- 全局缓存，用于存储路径到ID的映射 ---
-DIR_ID_CACHE = {}
+# --- 配置持久化核心函数 ---
+def load_config():
+    """从 config.json 加载配置"""
+    if not os.path.exists(CONFIG_FILE):
+        return {}
+    try:
+        with open(CONFIG_FILE, 'r') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {}
 
-# --- Token管理核心函数 ---
+def save_config(data):
+    """将配置保存到 config.json"""
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(data, f, indent=4)
+    except IOError as e:
+        print(f"Error saving config file: {e}")
+
+# --- Token管理核心函数 (已优化) ---
 def get_access_token():
-    """使用存储在session中的用户凭证获取或刷新access_token。"""
-    if CLIENT_ID_SESSION_KEY not in session or CLIENT_SECRET_SESSION_KEY not in session:
+    """
+    获取或刷新access_token。
+    优化流程：优先检查内存缓存 -> 检查文件 -> 最后才请求API。
+    """
+    # 1. 优先检查内存缓存
+    if _token_cache['accessToken'] and time.time() < _token_cache['expired_at_ts'] - 300:
+        return _token_cache['accessToken']
+
+    # 2. 内存缓存无效，检查配置文件
+    config = load_config()
+    client_id, client_secret = config.get('clientID'), config.get('clientSecret')
+    if not client_id or not client_secret:
         return None
 
-    expired_at_str = session.get(EXPIRED_AT_SESSION_KEY)
+    expired_at_str = config.get('expiredAt')
     if expired_at_str:
         try:
             expired_dt = datetime.fromisoformat(expired_at_str)
             expired_timestamp = expired_dt.timestamp()
-            if time.time() < expired_timestamp - 300: # 提前5分钟刷新
-                return session.get(TOKEN_SESSION_KEY)
+            if time.time() < expired_timestamp - 300:
+                # 成功获取Token后，更新内存缓存
+                _token_cache['accessToken'] = config['accessToken']
+                _token_cache['expired_at_ts'] = expired_timestamp
+                return config['accessToken']
         except (ValueError, TypeError):
-            print(f"无法解析日期格式: {expired_at_str}")
             pass
 
-    print("Refreshing token using user-provided credentials...")
+    # 4. 文件中的Token也无效，刷新Token
+    print("Refreshing token from API...")
     response = requests.post(
-        f"{API_BASE_URL}/access_token",
+        f"{API_DOMAIN}/api/v1/access_token",
         headers={'Platform': 'open_platform', 'Content-Type': 'application/json'},
-        json={'clientID': session[CLIENT_ID_SESSION_KEY], 'clientSecret': session[CLIENT_SECRET_SESSION_KEY]}
+        json={'clientID': client_id, 'clientSecret': client_secret}
     )
 
     if response.status_code == 200 and response.json().get('code') == 0:
         data = response.json()['data']
-        session[TOKEN_SESSION_KEY] = data['accessToken']
-        session[EXPIRED_AT_SESSION_KEY] = data['expiredAt']
-        print("Successfully refreshed token.")
-        return session[TOKEN_SESSION_KEY]
+        new_token, new_expired_at_str = data['accessToken'], data['expiredAt']
+        
+        # 更新配置文件
+        config['accessToken'] = new_token
+        config['expiredAt'] = new_expired_at_str
+        save_config(config)
+
+        # 更新内存缓存
+        try:
+            new_expired_dt = datetime.fromisoformat(new_expired_at_str)
+            _token_cache['accessToken'] = new_token
+            _token_cache['expired_at_ts'] = new_expired_dt.timestamp()
+        except (ValueError, TypeError):
+             _token_cache['expired_at_ts'] = 0
+
+        print("Successfully refreshed and saved token.")
+        return new_token
     
-    # 获取失败，清除无效的凭证
-    for key in [CLIENT_ID_SESSION_KEY, CLIENT_SECRET_SESSION_KEY, TOKEN_SESSION_KEY, EXPIRED_AT_SESSION_KEY]:
-        session.pop(key, None)
     print(f"Failed to refresh token. Response: {response.text}")
+    # 获取失败，清空缓存
+    _token_cache['accessToken'], _token_cache['expired_at_ts'] = None, 0
     return None
 
 # --- 装饰器与API请求封装 ---
@@ -71,50 +115,48 @@ def credentials_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-def api_request(method, endpoint, api_version='v1', **kwargs):
-    base_url = API_V2_BASE_URL if api_version == 'v2' else API_BASE_URL
-    token = session.get(TOKEN_SESSION_KEY)
+def api_request(method, endpoint, **kwargs):
+    token = get_access_token()
+    if not token: return None
+
     headers = {'Authorization': f"Bearer {token}", 'Platform': 'open_platform', 'Content-Type': 'application/json'}
     try:
-        response = requests.request(method, f"{base_url}{endpoint}", headers=headers, **kwargs)
+        response = requests.request(method, f"{API_DOMAIN}{endpoint}", headers=headers, **kwargs)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
         print(f"API请求失败: {e}")
         return None
-
+        
 # --- 核心路由 ---
 @app.route('/', methods=['GET', 'POST'])
 def configure():
-    """显示配置页面并处理凭证提交。"""
+    config = load_config()
     if request.method == 'POST':
-        client_id = request.form.get('client_id')
-        client_secret = request.form.get('client_secret')
-
+        client_id, client_secret = request.form.get('client_id'), request.form.get('client_secret')
         if not client_id or not client_secret:
             flash('Client ID 和 Client Secret 均不能为空。', 'error')
             return render_template('configure.html')
-        
-        session[CLIENT_ID_SESSION_KEY] = client_id
-        session[CLIENT_SECRET_SESSION_KEY] = client_secret
-        session[TASK_IDS_SESSION_KEY] = []
-        
+        # 临时保存以供 get_access_token 使用
+        save_config({'clientID': client_id, 'clientSecret': client_secret})
+        # 清除旧的内存缓存，强制重新获取
+        _token_cache['accessToken'], _token_cache['expired_at_ts'] = None, 0
         if get_access_token():
-            flash('凭证已保存并验证成功！', 'success')
+            flash('凭证已验证并成功保存！', 'success')
+            final_config = load_config()
+            if 'task_ids' not in final_config: final_config['task_ids'] = []
+            save_config(final_config)
             return redirect(url_for('dashboard'))
         else:
+            save_config(config) # 验证失败，恢复旧配置
             flash('提供的凭证无效，请重新检查并提交。', 'error')
             return render_template('configure.html')
-            
-    if session.get(CLIENT_ID_SESSION_KEY):
-        return redirect(url_for('dashboard'))
-
+    if get_access_token(): return redirect(url_for('dashboard'))
     return render_template('configure.html')
 
 @app.route('/dashboard')
 @credentials_required
-def dashboard():
-    return render_template('dashboard.html')
+def dashboard(): return render_template('dashboard.html')
 
 @app.route('/add_tasks', methods=['POST'])
 @credentials_required
@@ -125,20 +167,19 @@ def add_tasks():
     if not links:
         flash('下载链接不能为空。', 'error')
         return redirect(url_for('dashboard'))
-
+    config = load_config()
+    task_ids = config.get('task_ids', [])
     added_count = 0
     for link in links:
         payload = {'url': link}
-        if dir_id and dir_id.isdigit():
-            payload['dirID'] = int(dir_id)
-        
-        result = api_request('post', '/offline/download', json=payload)
+        if dir_id and dir_id.isdigit(): payload['dirID'] = int(dir_id)
+        result = api_request('post', '/api/v1/offline/download', json=payload)
         if result and result.get('code') == 0:
             task_id = result['data']['taskID']
-            session.setdefault(TASK_IDS_SESSION_KEY, []).append(task_id)
+            if task_id not in task_ids: task_ids.append(task_id)
             added_count += 1
-    
-    session.modified = True
+    config['task_ids'] = task_ids
+    save_config(config)
     flash(f"成功添加 {added_count} / {len(links)} 个离线任务。", 'success')
     return redirect(url_for('dashboard'))
 
@@ -150,44 +191,78 @@ def get_folders():
     last_file_id = 0
     while True:
         params = {'parentFileId': parent_id, 'limit': 100}
-        if last_file_id != 0:
-            params['lastFileId'] = last_file_id
-        
-        list_data = api_request('get', '/file/list', api_version='v2', params=params)
+        if last_file_id != 0: params['lastFileId'] = last_file_id
+        list_data = api_request('get', '/api/v2/file/list', params=params)
         if not (list_data and list_data.get('code') == 0):
             return jsonify({"error": "Failed to fetch folders"}), 500
-
         data = list_data.get('data', {})
         file_list = data.get('fileList', [])
-        
         for item in file_list:
             if item['type'] == 1 and item.get('trashed', 0) == 0:
                 all_folders.append({"id": item['fileId'], "name": item['filename']})
-        
         last_file_id = data.get('lastFileId', -1)
-        if last_file_id == -1:
-            break
+        if last_file_id == -1: break
     return jsonify(all_folders)
+
+@app.route('/api/create_folder', methods=['POST'])
+@credentials_required
+def create_folder():
+    data = request.get_json()
+    folder_name = data.get('name')
+    parent_id = data.get('parentID')
+
+    if not folder_name or parent_id is None:
+        return jsonify({"error": "Missing folder name or parent ID"}), 400
+
+    payload = {'name': folder_name, 'parentID': int(parent_id)}
+    result = api_request('post', '/upload/v1/file/mkdir', json=payload)
+    
+    if result and result.get('code') == 0:
+        return jsonify(result['data']), 201 # 201 Created
+    elif result:
+        return jsonify({"error": result.get('message', 'Failed to create folder'), "api_response": result}), 400
+    else:
+        return jsonify({"error": "Failed to create folder due to a server or network error"}), 500
 
 @app.route('/api/tasks_status')
 @credentials_required
 def get_tasks_status():
-    task_ids = session.get(TASK_IDS_SESSION_KEY, [])
+    task_ids = load_config().get('task_ids', [])
     if not task_ids: return jsonify({})
     status_map = {}
     for task_id in task_ids:
-        progress_data = api_request('get', '/offline/download/process', params={'taskID': task_id})
+        progress_data = api_request('get', '/api/v1/offline/download/process', params={'taskID': task_id})
         if progress_data and progress_data.get('code') == 0:
             status_map[task_id] = progress_data['data']
         else:
-            status_map[task_id] = {'status': -1, 'process': 0}
+            status_map[task_id] = {'status': -1, 'process': 0, 'statusText': '查询失败'}
     return jsonify(status_map)
 
-@app.route('/logout')
-def logout():
-    session.clear()
-    DIR_ID_CACHE.clear()
-    flash('您已退出，所有凭证和任务列表已被清除。', 'info')
+@app.route('/api/clear_completed_tasks', methods=['POST'])
+@credentials_required
+def clear_completed_tasks():
+    config = load_config()
+    task_ids = config.get('task_ids', [])
+    if not task_ids: return jsonify({"message": "No tasks to clear."})
+    active_tasks = []
+    for task_id in task_ids:
+        progress_data = api_request('get', '/api/v1/offline/download/process', params={'taskID': task_id})
+        if progress_data and progress_data.get('code') == 0:
+            status = progress_data['data'].get('status')
+            if status not in [1, 2]: active_tasks.append(task_id)
+        else:
+            active_tasks.append(task_id)
+    cleared_count = len(task_ids) - len(active_tasks)
+    config['task_ids'] = active_tasks
+    save_config(config)
+    flash(f"已清理 {cleared_count} 个已完成的任务。", 'info')
+    return jsonify({"message": f"Cleared {cleared_count} completed tasks."})
+
+@app.route('/reset')
+def reset_config():
+    if os.path.exists(CONFIG_FILE): os.remove(CONFIG_FILE)
+    _token_cache['accessToken'], _token_cache['expired_at_ts'] = None, 0
+    flash('配置已清除。请重新输入您的凭证。', 'info')
     return redirect(url_for('configure'))
 
 if __name__ == '__main__':

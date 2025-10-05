@@ -1,48 +1,60 @@
 {% extends "layout.html" %}
 {% block content %}
 <header class="flex justify-between items-center mb-6 pb-4 border-b border-gray-700">
-    <h1 class="text-2xl font-bold text-cyan-400">离线任务仪表盘</h1>
-    <a href="{{ url_for('logout') }}" class="bg-yellow-600 hover:bg-yellow-700 text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold">退出 & 重新配置</a>
+    <div class="flex items-center gap-3">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-cyan-400">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+        </svg>
+        <h1 class="text-2xl font-bold text-cyan-400">离线任务仪表盘</h1>
+    </div>
+    <a href="{{ url_for('reset_config') }}" class="bg-yellow-600 hover:bg-yellow-700 text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
+        重置配置
+    </a>
 </header>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
     <!-- 左侧：添加任务 -->
     <div class="lg:col-span-1 bg-gray-800 p-6 rounded-lg h-fit shadow-lg">
-        <h2 class="text-xl font-semibold mb-4">添加新任务</h2>
+        <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+            添加新任务
+        </h2>
         <form action="{{ url_for('add_tasks') }}" method="POST">
             <div class="mb-4">
                 <label for="links" class="block mb-2 text-sm font-medium">下载链接 (每行一个)</label>
-                <textarea name="links" id="links" rows="8" class="w-full bg-gray-700 rounded-lg p-2.5" placeholder="粘贴 http/https 链接..." required></textarea>
+                <textarea name="links" id="links" rows="8" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 focus:ring-cyan-500 focus:border-cyan-500 transition" placeholder="粘贴 http/https/magnet/ed2k 链接..." required></textarea>
             </div>
             <div class="mb-6">
                 <label for="dirPathDisplay" class="block mb-2 text-sm font-medium">保存到目录 (可选)</label>
                 <div class="flex">
-                    <input id="dirPathDisplay" type="text" class="w-full bg-gray-700 rounded-l-lg p-2.5" placeholder="点击右侧按钮选择..." readonly>
-                    <!-- 隐藏输入框，用于向后端提交真正的dirID -->
-                    <input type="hidden" name="dirID" id="dirID_hidden">
-                    <button type="button" id="openFolderBrowserBtn" class="bg-cyan-600 hover:bg-cyan-700 px-4 rounded-r-lg">选择...</button>
+                    <input id="dirPathDisplay" type="text" class="w-full bg-gray-700 border border-gray-600 rounded-l-lg p-2.5" placeholder="默认为根目录" readonly>
+                    <input type="hidden" name="dirID" id="dirID_hidden" value="0">
+                    <button type="button" id="openFolderBrowserBtn" class="bg-cyan-600 hover:bg-cyan-700 px-4 rounded-r-lg font-semibold transition-colors">选择</button>
                 </div>
             </div>
-            <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 rounded-lg">批量提交任务</button>
+            <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" /></svg>
+                批量提交任务
+            </button>
         </form>
     </div>
 
     <!-- 右侧：任务列表 -->
     <div class="lg:col-span-2 bg-gray-800 p-6 rounded-lg shadow-lg">
-        <h2 class="text-xl font-semibold mb-4">任务监控</h2>
-        <div class="overflow-x-auto">
-            <table class="w-full text-left text-sm">
-                <thead class="text-xs text-gray-400 uppercase bg-gray-700">
-                    <tr>
-                        <th class="px-4 py-3">Task ID</th>
-                        <th class="px-4 py-3">状态</th>
-                        <th class="px-4 py-3 w-1/2">进度</th>
-                    </tr>
-                </thead>
-                <tbody id="task-list-body">
-                    <tr><td colspan="3" class="text-center py-8 text-gray-500">正在初始化监控...</td></tr>
-                </tbody>
-            </table>
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-1.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25A2.25 2.25 0 0 1 5.25 3h4.5a2.25 2.25 0 0 1 2.25 2.25v.75" /></svg>
+                任务监控
+            </h2>
+            <button id="clear-completed-btn" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-md text-sm font-semibold flex items-center gap-1 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.134-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.067-2.09.921-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>
+                清理已完成
+            </button>
+        </div>
+        <div id="task-list-container" class="space-y-3">
+            <!-- JS会在这里填充任务卡片 -->
         </div>
     </div>
 </div>
@@ -51,142 +63,242 @@
 <div id="folderBrowserModal" class="fixed inset-0 bg-black bg-opacity-60 items-center justify-center z-50 hidden">
     <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg h-3/4 flex flex-col">
         <div class="p-4 border-b border-gray-700 flex justify-between items-center">
-            <h3 class="text-lg font-semibold">选择一个文件夹</h3>
+            <h3 class="text-lg font-semibold">选择保存目录</h3>
             <button id="closeFolderBrowserBtn" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
         </div>
-        <div id="folderTreeContainer" class="p-4 overflow-y-auto flex-grow">
-            <!-- JS会在这里填充文件夹树 -->
+        
+        <div class="p-2 border-b border-gray-700 bg-gray-900/50">
+            <div id="breadcrumb-nav" class="flex items-center text-sm text-gray-400 mb-2 overflow-x-auto whitespace-nowrap"></div>
+            <div class="flex items-center justify-between">
+                <button id="selectCurrentFolderBtn" class="bg-cyan-700 hover:bg-cyan-600 text-white px-3 py-1 rounded-md text-sm font-semibold flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" /></svg>
+                    选择当前目录
+                </button>
+                <div class="flex items-center gap-2">
+                    <div id="new-folder-input-container" class="hidden">
+                        <input type="text" id="new-folder-name" class="bg-gray-700 border border-gray-600 text-sm rounded-md p-1 w-32" placeholder="新文件夹名称...">
+                        <button id="confirm-create-folder-btn" class="text-green-400 hover:text-green-300 p-1">✓</button>
+                        <button id="cancel-create-folder-btn" class="text-red-400 hover:text-red-300 p-1">×</button>
+                    </div>
+                    <button id="add-new-folder-btn" class="text-gray-400 hover:text-white p-1 rounded-md">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10.5v6m3-3H9m4.06-7.19-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" /></svg>
+                    </button>
+                </div>
+            </div>
         </div>
+
+        <div id="folderTreeContainer" class="p-4 overflow-y-auto flex-grow"></div>
         <div class="p-4 border-t border-gray-700 flex justify-end">
-            <button id="cancelFolderBrowserBtn" class="px-4 py-2 bg-gray-600 rounded">取消</button>
+            <button id="cancelFolderBrowserBtn" class="px-4 py-2 bg-gray-600 rounded-lg">关闭</button>
         </div>
     </div>
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        // --- 任务监控 ---
-        const statusMapping = {
-            0: { text: '进行中', color: 'bg-blue-600' }, 1: { text: '下载失败', color: 'bg-red-600' },
-            2: { text: '下载成功', color: 'bg-green-600' }, 3: { text: '重试中', color: 'bg-yellow-600' },
-            '-1': { text: '查询失败/已过期', color: 'bg-gray-600'}
-        };
-
-        async function fetchTaskStatus() {
-            try {
-                const response = await fetch("{{ url_for('get_tasks_status') }}");
-                if (!response.ok) { window.location.href = "{{ url_for('configure') }}"; return; }
-                const tasks = await response.json();
-                const tbody = document.getElementById('task-list-body');
-                tbody.innerHTML = '';
-                const taskIds = Object.keys(tasks);
-                if (taskIds.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-gray-500">暂无监控中的任务。</td></tr>';
-                    return;
-                }
-                taskIds.sort((a, b) => b - a).forEach(taskId => {
-                    const task = tasks[taskId];
-                    const statusInfo = statusMapping[task.status] || { text: '未知', color: 'bg-gray-600' };
-                    const progress = parseFloat(task.process || 0).toFixed(2);
-                    const rowHtml = `
-                        <tr class="border-b border-gray-700">
-                            <td class="px-4 py-3 font-mono text-gray-400">${taskId}</td>
-                            <td class="px-4 py-3"><span class="px-2 py-1 text-xs font-medium rounded-full ${statusInfo.color}">${statusInfo.text}</span></td>
-                            <td class="px-4 py-3">
-                                <div class="w-full bg-gray-600 rounded-full h-2.5">
-                                    <div class="progress-bar-transition ${statusInfo.color} h-2.5 rounded-full" style="width: ${progress}%"></div>
-                                </div>
-                                <span class="text-xs text-gray-400 ml-2">${progress}%</span>
-                            </td></tr>`;
-                    tbody.insertAdjacentHTML('beforeend', rowHtml);
-                });
-            } catch (error) {
-                console.error("加载任务状态失败:", error);
-                document.getElementById('task-list-body').innerHTML = '<tr><td colspan="3" class="text-center py-8 text-red-400">加载任务状态失败。</td></tr>';
+document.addEventListener('DOMContentLoaded', () => {
+    // --- 任务监控逻辑 ---
+    const statusMapping = {
+        0: { text: '进行中', color: 'bg-blue-600', icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 animate-spin"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 11.667 0l3.181-3.183m-4.991-2.691V5.25a2.25 2.25 0 0 0-2.25-2.25L10.5 3z" /></svg>` },
+        1: { text: '下载失败', color: 'bg-red-600', icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>` },
+        2: { text: '下载成功', color: 'bg-green-600', icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>` },
+        3: { text: '重试中', color: 'bg-yellow-600', icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 11.667 0l3.181-3.183m-4.991-2.691V5.25a2.25 2.25 0 0 0-2.25-2.25L10.5 3z" /></svg>` },
+        '-1': { text: '查询失败', color: 'bg-gray-600', icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>` }
+    };
+    const taskContainer = document.getElementById('task-list-container');
+    async function fetchTaskStatus() {
+        try {
+            const response = await fetch("{{ url_for('get_tasks_status') }}");
+            if (!response.ok) { window.location.href = "{{ url_for('configure') }}"; return; }
+            const tasks = await response.json();
+            taskContainer.innerHTML = '';
+            const taskIds = Object.keys(tasks);
+            if (taskIds.length === 0) {
+                taskContainer.innerHTML = '<div class="text-center py-10 text-gray-500">暂无监控中的任务。</div>';
+                return;
             }
-        }
-        fetchTaskStatus();
-        setInterval(fetchTaskStatus, 3000);
-
-        // --- 文件夹浏览器 ---
-        const openBtn = document.getElementById('openFolderBrowserBtn');
-        const modal = document.getElementById('folderBrowserModal');
-        const treeContainer = document.getElementById('folderTreeContainer');
-        const dirPathDisplay = document.getElementById('dirPathDisplay');
-        const dirIDHidden = document.getElementById('dirID_hidden');
-        
-        const closeButtons = [document.getElementById('closeFolderBrowserBtn'), document.getElementById('cancelFolderBrowserBtn')];
-        closeButtons.forEach(btn => btn.addEventListener('click', () => modal.style.display = 'none'));
-
-        openBtn.addEventListener('click', () => {
-            modal.style.display = 'flex';
-            treeContainer.innerHTML = '';
-            const rootUl = document.createElement('ul');
-            treeContainer.appendChild(rootUl);
-            
-            const rootLi = document.createElement('li');
-            rootLi.innerHTML = `<div class="folder-item flex items-center p-1 rounded hover:bg-gray-700 cursor-pointer">
-                <span class="expander w-6 text-center">▸</span>
-                <span class="folder-name flex-grow font-bold">根目录</span>
-                <button class="select-btn bg-cyan-700 text-xs px-2 py-0.5 rounded">选择</button>
-            </div><ul class="subfolder-list hidden pl-6"></ul>`;
-            rootUl.appendChild(rootLi);
-
-            const selectRootAction = () => selectAndClose('根目录', '0');
-            rootLi.querySelector('.folder-name').addEventListener('click', selectRootAction);
-            rootLi.querySelector('.select-btn').addEventListener('click', selectRootAction);
-
-            rootLi.querySelector('.expander').addEventListener('click', (e) => {
-                e.stopPropagation();
-                toggleExpand(e.currentTarget, 0, '根目录');
+            taskIds.sort((a, b) => b - a).forEach(taskId => {
+                const task = tasks[taskId];
+                const statusInfo = statusMapping[task.status] || { text: '未知', color: 'bg-gray-600', icon: statusMapping['-1'].icon };
+                const progress = parseFloat(task.process || 0).toFixed(2);
+                const cardHtml = `
+                    <div class="bg-gray-700/50 p-4 rounded-lg border border-gray-700">
+                        <div class="flex items-center justify-between mb-3">
+                            <p class="font-mono text-sm text-gray-400">Task ID: ${taskId}</p>
+                            <div class="flex items-center gap-2 px-2 py-1 text-xs font-medium rounded-full ${statusInfo.color}">
+                                ${statusInfo.icon}
+                                <span>${task.statusText || statusInfo.text}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-full bg-gray-600 rounded-full h-2.5">
+                                <div class="progress-bar-transition ${statusInfo.color} h-2.5 rounded-full" style="width: ${progress}%"></div>
+                            </div>
+                            <span class="text-sm text-gray-300 font-semibold w-12 text-right">${progress}%</span>
+                        </div>
+                        ${task.fileName ? `<p class="text-xs text-gray-400 mt-2 truncate">文件名: ${task.fileName}</p>` : ''}
+                    </div>`;
+                taskContainer.insertAdjacentHTML('beforeend', cardHtml);
             });
-        });
-        
-        function selectAndClose(path, id) {
-            dirPathDisplay.value = path;
-            dirIDHidden.value = id;
-            modal.style.display = 'none';
+        } catch (error) {
+            console.error("加载任务状态失败:", error);
+            taskContainer.innerHTML = '<div class="text-center py-10 text-red-400">加载任务状态失败。</div>';
         }
-
-        async function toggleExpand(expander, parentId, pathPrefix) {
-            const subfolderList = expander.closest('.folder-item').nextElementSibling;
-            const isExpanded = subfolderList.classList.toggle('hidden');
-            expander.textContent = isExpanded ? '▸' : '▾';
-            if (!isExpanded && subfolderList.innerHTML === '') {
-                subfolderList.innerHTML = '<li class="text-gray-400 pl-4">加载中...</li>';
-                try {
-                    const response = await fetch(`/api/get_folders?parent_id=${parentId}`);
-                    const folders = await response.json();
-                    subfolderList.innerHTML = '';
-                    if (folders.length === 0) {
-                        subfolderList.innerHTML = '<li class="text-gray-500 pl-4">（空）</li>';
-                    }
-                    folders.forEach(folder => {
-                        const li = document.createElement('li');
-                        const fullPath = (pathPrefix === '根目录') ? folder.name : `${pathPrefix}/${folder.name}`;
-                        li.innerHTML = `<div class="folder-item flex items-center p-1 rounded hover:bg-gray-700 cursor-pointer">
-                            <span class="expander w-6 text-center">▸</span>
-                            <span class="folder-name flex-grow">${folder.name}</span>
-                            <button class="select-btn bg-cyan-700 text-xs px-2 py-0.5 rounded">选择</button>
-                        </div><ul class="subfolder-list hidden pl-6"></ul>`;
-                        
-                        const newExpander = li.querySelector('.expander');
-                        newExpander.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            toggleExpand(newExpander, folder.id, fullPath);
-                        });
-                        
-                        const selectAction = () => selectAndClose(fullPath, folder.id);
-                        li.querySelector('.folder-name').addEventListener('click', selectAction);
-                        li.querySelector('.select-btn').addEventListener('click', selectAction);
-
-                        subfolderList.appendChild(li);
-                    });
-                } catch (error) {
-                    subfolderList.innerHTML = '<li class="text-red-400 pl-4">加载失败</li>';
-                }
-            }
-        }
+    }
+    fetchTaskStatus();
+    setInterval(fetchTaskStatus, 3000);
+    document.getElementById('clear-completed-btn').addEventListener('click', async () => {
+        try {
+            const response = await fetch("{{ url_for('clear_completed_tasks') }}", { method: 'POST' });
+            if (response.ok) window.location.reload();
+            else alert("清理任务失败！");
+        } catch (error) { console.error("清理任务请求失败:", error); }
     });
+
+    // --- 文件夹浏览器 ---
+    const modal = document.getElementById('folderBrowserModal');
+    const treeContainer = document.getElementById('folderTreeContainer');
+    const dirPathDisplay = document.getElementById('dirPathDisplay');
+    const dirIDHidden = document.getElementById('dirID_hidden');
+    const breadcrumbNav = document.getElementById('breadcrumb-nav');
+    let folderCache = {}, currentPath = [];
+
+    const openBtn = document.getElementById('openFolderBrowserBtn');
+    const closeButtons = [document.getElementById('closeFolderBrowserBtn'), document.getElementById('cancelFolderBrowserBtn')];
+    const selectCurrentFolderBtn = document.getElementById('selectCurrentFolderBtn');
+    const addNewFolderBtn = document.getElementById('add-new-folder-btn');
+    const newFolderInputContainer = document.getElementById('new-folder-input-container');
+    const newFolderNameInput = document.getElementById('new-folder-name');
+    const confirmCreateBtn = document.getElementById('confirm-create-folder-btn');
+    const cancelCreateBtn = document.getElementById('cancel-create-folder-btn');
+
+    function selectAndClose(path, id) {
+        dirPathDisplay.value = path;
+        dirIDHidden.value = id;
+        modal.style.display = 'none';
+    }
+
+    function renderBreadcrumbs() {
+        breadcrumbNav.innerHTML = '';
+        currentPath.forEach((part, index) => {
+            const isLast = index === currentPath.length - 1;
+            const partEl = document.createElement(isLast ? 'span' : 'a');
+            partEl.textContent = part.name;
+            partEl.className = isLast ? 'font-semibold text-white' : 'hover:underline cursor-pointer';
+            if (!isLast) partEl.onclick = () => navigateToPath(index);
+            breadcrumbNav.appendChild(partEl);
+            if (!isLast) {
+                const separator = document.createElement('span');
+                separator.textContent = '>';
+                separator.className = 'mx-2';
+                breadcrumbNav.appendChild(separator);
+            }
+        });
+    }
+
+    async function renderFolders(parentId) {
+        treeContainer.innerHTML = '<div class="text-gray-400">加载中...</div>';
+        if (folderCache[parentId]) {
+            displayFolders(folderCache[parentId]);
+            return;
+        }
+        try {
+            const response = await fetch(`/api/get_folders?parent_id=${parentId}`);
+            const folders = await response.json();
+            if (folders.error) throw new Error(folders.error);
+            folderCache[parentId] = folders;
+            displayFolders(folders);
+        } catch (error) {
+            treeContainer.innerHTML = `<div class="text-red-400">加载失败: ${error.message}</div>`;
+        }
+    }
+
+    function displayFolders(folders) {
+        treeContainer.innerHTML = '';
+        if (folders.length === 0) {
+            treeContainer.innerHTML = '<div class="text-gray-500">（此文件夹为空）</div>';
+            return;
+        }
+        const ul = document.createElement('ul');
+        ul.className = 'space-y-1';
+        folders.forEach(folder => {
+            const li = document.createElement('li');
+            li.className = 'flex items-center justify-between p-1.5 rounded-md hover:bg-gray-700/50 group';
+            li.innerHTML = `<span class="flex-grow cursor-pointer">${folder.name}</span><button class="select-btn bg-cyan-800 text-xs px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">选择</button>`;
+            li.querySelector('.flex-grow').onclick = () => navigateTo(folder.id, folder.name);
+            li.querySelector('.select-btn').onclick = (e) => {
+                e.stopPropagation();
+                const fullPath = [...currentPath.map(p => p.name), folder.name].join(' > ').replace('根目录 > ', '');
+                selectAndClose(fullPath, folder.id);
+            };
+            ul.appendChild(li);
+        });
+        treeContainer.appendChild(ul);
+    }
+    
+    function navigateTo(folderId, folderName) {
+        currentPath.push({ id: folderId, name: folderName });
+        renderBreadcrumbs();
+        renderFolders(folderId);
+    }
+
+    function navigateToPath(pathIndex) {
+        currentPath = currentPath.slice(0, pathIndex + 1);
+        renderBreadcrumbs();
+        renderFolders(currentPath[pathIndex].id);
+    }
+
+    async function handleCreateFolder() {
+        const folderName = newFolderNameInput.value.trim();
+        const parentId = currentPath[currentPath.length - 1].id;
+        if (!folderName) return;
+        confirmCreateBtn.disabled = true;
+        try {
+            const response = await fetch('/api/create_folder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: folderName, parentID: parentId })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || '创建失败');
+            delete folderCache[parentId];
+            renderFolders(parentId);
+        } catch (error) {
+            alert(`创建文件夹失败: ${error.message}`);
+        } finally {
+            newFolderInputContainer.classList.add('hidden');
+            addNewFolderBtn.classList.remove('hidden');
+            newFolderNameInput.value = '';
+            confirmCreateBtn.disabled = false;
+        }
+    }
+
+    openBtn.addEventListener('click', () => {
+        modal.style.display = 'flex';
+        currentPath = [{id: 0, name: '根目录'}];
+        renderBreadcrumbs();
+        renderFolders(0);
+    });
+    closeButtons.forEach(btn => btn.addEventListener('click', () => modal.style.display = 'none'));
+    selectCurrentFolderBtn.addEventListener('click', () => {
+        const currentFolder = currentPath[currentPath.length - 1];
+        const pathString = currentPath.map(p => p.name).join(' > ').replace('根目录 > ', '');
+        selectAndClose(pathString || '根目录', currentFolder.id);
+    });
+    addNewFolderBtn.addEventListener('click', () => {
+        addNewFolderBtn.classList.add('hidden');
+        newFolderInputContainer.classList.remove('hidden');
+        newFolderNameInput.focus();
+    });
+    cancelCreateBtn.addEventListener('click', () => {
+        newFolderInputContainer.classList.add('hidden');
+        addNewFolderBtn.classList.remove('hidden');
+        newFolderNameInput.value = '';
+    });
+    confirmCreateBtn.addEventListener('click', handleCreateFolder);
+    newFolderNameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleCreateFolder();
+        if (e.key === 'Escape') cancelCreateBtn.click();
+    });
+});
 </script>
 {% endblock %}
