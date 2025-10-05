@@ -2,7 +2,7 @@
 
 一个安全、开源、自托管的123云盘离线下载管理面板。
 
-![Dashboard Screenshot](https://user-images.githubusercontent.com/your-username/your-repo/assets/screenshot.png) <!-- 建议您运行后截一张图替换此链接 -->
+![Dashboard Screenshot](https://p.inari.site/usr/1764/68aab99e51720.jpg)
 
 ## ✨ 功能特性
 
@@ -37,7 +37,7 @@
 
 ```bash
 # 1. 克隆本项目
-git clone https://github.com/your-username/123pan-offline-dashboard.git
+git clone https://github.com/ZZ0YY/123pan-offline-dashboard.git
 cd 123pan-offline-dashboard
 
 # 2. (推荐) 创建并激活Python虚拟环境
